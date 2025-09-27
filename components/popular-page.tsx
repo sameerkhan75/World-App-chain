@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useRef } from "react"
 import { Plus, Users } from "lucide-react"
+import { useAuth } from "@/components/auth-provider"
+import { MiniKit, VerifyCommandInput, VerificationLevel, ISuccessResult, PayCommandInput, Tokens, tokenToDecimals } from '@worldcoin/minikit-js'
 
 // Echo icon component (upvote arrow)
 const EchoIcon = ({ size = 18 }: { size?: number }) => (
@@ -50,18 +52,27 @@ export function PopularPage({ communityName, communityId }: PopularPageProps) {
   
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const { user } = useAuth()
 
   useEffect(() => {
     fetchNews()
-  }, [communityId])
+  }, [communityId, user])
 
   const fetchNews = async () => {
     try {
       let url: string
+      const params = new URLSearchParams()
+      
+      // Add user information if available
+      if (user) {
+        params.append('user_id', user.id)
+        params.append('user_display_name', user.display_name)
+      }
+      
       if (communityId) {
-        url = `/api/communities/${communityId}/news`
+        url = `/api/communities/${communityId}/news?${params.toString()}`
       } else {
-        url = "/api/news"
+        url = `/api/news?${params.toString()}`
       }
 
       const response = await fetch(url)
@@ -83,23 +94,147 @@ export function PopularPage({ communityName, communityId }: PopularPageProps) {
 
   const handleUpvote = async (newsId: string) => {
     try {
+      if (!user) {
+        console.error('User not authenticated for upvote')
+        return
+      }
+      
+      console.log('🔍 Starting upvote process for:', newsId)
+      
+      let payload: ISuccessResult | undefined = undefined
+      
+      // Only do verification if in World App
+      if (MiniKit.isInstalled()) {
+        console.log('📱 World App detected, starting verification...')
+        try {
+          const verifyPayload: VerifyCommandInput = {
+            action: 'verify',
+            verification_level: VerificationLevel.Orb,
+          }
+          const { finalPayload } = await MiniKit.commandsAsync.verify(verifyPayload)
+          if (finalPayload.status === 'error') {
+            console.error('❌ Verification failed:', finalPayload)
+            return
+          }
+          console.log('✅ Verification successful')
+          payload = finalPayload as ISuccessResult
+        } catch (verifyError) {
+          console.error('❌ Verification error:', verifyError)
+          return
+        }
+      } else {
+        console.log('🌐 Browser mode detected, skipping verification')
+      }
+
+      console.log('📡 Sending upvote request...')
       const response = await fetch(`/api/news/${newsId}/upvote`, {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          user_id: user.id,
+          user_display_name: user.display_name,
+          payload,
+          action: 'verify',
+        }),
       })
+      
       const data = await response.json()
+      console.log('📡 Upvote response:', { status: response.status, data })
 
       if (response.ok) {
+        console.log('✅ Upvote successful, updating UI...')
         const newUserUpvotes = new Set(userUpvotes)
         if (data.upvoted) {
           newUserUpvotes.add(newsId)
+          console.log('👍 Added upvote for:', newsId)
         } else {
           newUserUpvotes.delete(newsId)
+          console.log('👎 Removed upvote for:', newsId)
         }
         setUserUpvotes(newUserUpvotes)
+        
+        // Refresh the news to get updated counts
+        console.log('🔄 Refreshing news data...')
         fetchNews()
+      } else {
+        console.error('❌ Upvote failed:', data)
       }
     } catch (error) {
-      console.error("Failed to upvote:", error)
+      console.error("❌ Failed to upvote:", error)
+    }
+  }
+
+  const handleContribute = async (newsItem: NewsItem) => {
+    try {
+      if (!user) {
+        console.error('User not authenticated for contribution')
+        return
+      }
+
+      if (!MiniKit.isInstalled()) {
+        console.log('MiniKit not installed - payment not available')
+        return
+      }
+
+      // Step 1: Initiate payment 
+      const initRes = await fetch('/api/initiate-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to_address: newsItem.author_id, // Using author_id as wallet address for demo
+          author_name: newsItem.author_name || 'Anonymous',
+          post_title: newsItem.title
+        })
+      })
+      
+      if (!initRes.ok) {
+        throw new Error('Failed to initiate payment')
+      }
+      
+      const { id: reference } = await initRes.json()
+
+      // Step 2: Send payment command
+      const payload: PayCommandInput = {
+        reference,
+        to: newsItem.author_id, // Demo: using author_id as wallet address
+        tokens: [
+          {
+            symbol: Tokens.WLD,
+            token_amount: tokenToDecimals(0.1, Tokens.WLD).toString(), // 0.1 WLD minimum
+          },
+          {
+            symbol: Tokens.USDC,
+            token_amount: tokenToDecimals(0.1, Tokens.USDC).toString(), // 0.1 USDC minimum
+          },
+        ],
+        description: `Contribution to "${newsItem.title}" by ${newsItem.author_name || 'Anonymous'}`,
+      }
+
+      const { finalPayload } = await MiniKit.commandsAsync.pay(payload)
+
+      if (finalPayload.status === 'success') {
+        // Step 3: Confirm payment
+        const confirmRes = await fetch('/api/confirm-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ payload: finalPayload }),
+        })
+        
+        const confirmation = await confirmRes.json()
+        if (confirmation.success) {
+          console.log('✅ Payment successful!')
+          // TODO: Update UI to show contribution success
+          // TODO: Refresh news to show updated contribution stats
+        } else {
+          console.error('❌ Payment verification failed:', confirmation)
+        }
+      } else {
+        console.log('Payment cancelled or failed:', finalPayload)
+      }
+    } catch (error) {
+      console.error("Failed to process contribution:", error)
     }
   }
 
@@ -261,6 +396,7 @@ export function PopularPage({ communityName, communityId }: PopularPageProps) {
                 variant="ghost"
                 size="sm"
                 className="flex items-center gap-2 flex-1 justify-center h-10"
+                onClick={() => handleContribute(news[currentIndex])}
               >
                 <DollarCoinIcon size={18} />
                 <span className="font-medium">Contribute</span>

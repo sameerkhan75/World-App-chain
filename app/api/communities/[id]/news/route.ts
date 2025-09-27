@@ -1,5 +1,4 @@
 import { IPFSDataService } from "@/lib/ipfs-service"
-import { AuthService } from "@/lib/auth-service"
 import { type NextRequest, NextResponse } from "next/server"
 
 export async function GET(
@@ -8,17 +7,16 @@ export async function GET(
 ) {
   try {
     const { id: communityId } = await params
-    
-    // Get current user for upvote status and user-specific data
-    const user = await AuthService.getCurrentUser()
-    const userDisplayName = user?.display_name
+    const { searchParams } = new URL(request.url)
+    const userId = searchParams.get("user_id")
+    const userDisplayName = searchParams.get("user_display_name")
     
     console.log('📋 Fetching community news for user:', userDisplayName || 'anonymous', 'community:', communityId)
     
     const result = await IPFSDataService.getCommunityNews(
       communityId, 
-      user?.id,
-      userDisplayName
+      userId || undefined,
+      userDisplayName || undefined
     )
 
     if (!result.community) {

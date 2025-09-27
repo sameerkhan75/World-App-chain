@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card"
 import { CreateCommunityModal } from "@/components/create-community-modal"
 import { CreatePostModal } from "@/components/create-post-modal"
 import { useAuth } from "@/components/auth-provider"
+import { MiniKit, VerifyCommandInput, VerificationLevel, ISuccessResult, PayCommandInput, Tokens, tokenToDecimals } from '@worldcoin/minikit-js'
 
 // Echo icon component (upvote arrow)
 const EchoIcon = ({ size = 18 }: { size?: number }) => (
@@ -49,12 +50,9 @@ interface Post {
 
 interface CommunitiesPageProps {
   onCommunitySelect?: (communityName: string, communityId: string) => void
-  isVerified?: boolean
-  onVerify?: () => Promise<void>
-  onResetVerification?: () => void
 }
 
-export function CommunitiesPage({ onCommunitySelect, isVerified = false, onVerify, onResetVerification }: CommunitiesPageProps) {
+export function CommunitiesPage({ onCommunitySelect }: CommunitiesPageProps) {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false)
   const [communities, setCommunities] = useState<Community[]>([])
@@ -65,7 +63,7 @@ export function CommunitiesPage({ onCommunitySelect, isVerified = false, onVerif
   const [currentPostIndex, setCurrentPostIndex] = useState(0)
   const [userUpvotes, setUserUpvotes] = useState<Set<string>>(new Set())
   const [isTransitioning, setIsTransitioning] = useState(false)
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
 
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -91,7 +89,12 @@ export function CommunitiesPage({ onCommunitySelect, isVerified = false, onVerif
   const fetchCommunityPosts = async (communityId: string) => {
     setPostsLoading(true)
     try {
-      const response = await fetch(`/api/communities/${communityId}/news`)
+      const params = new URLSearchParams()
+      if (user) {
+        params.append('user_id', user.id)
+        params.append('user_display_name', user.display_name)
+      }
+      const response = await fetch(`/api/communities/${communityId}/news?${params.toString()}`)
       const data = await response.json()
       if (data.news) {
         setCommunityPosts(data.news)
@@ -118,25 +121,149 @@ export function CommunitiesPage({ onCommunitySelect, isVerified = false, onVerif
 
   const handleUpvote = async (newsId: string) => {
     try {
+      if (!user) {
+        console.error('User not authenticated for upvote')
+        return
+      }
+      
+      console.log('🔍 Starting upvote process for:', newsId)
+      
+      let payload: ISuccessResult | undefined = undefined
+      
+      // Only do verification if in World App
+      if (MiniKit.isInstalled()) {
+        console.log('📱 World App detected, starting verification...')
+        try {
+          const verifyPayload: VerifyCommandInput = {
+            action: 'verify',
+            verification_level: VerificationLevel.Orb,
+          }
+          const { finalPayload } = await MiniKit.commandsAsync.verify(verifyPayload)
+          if (finalPayload.status === 'error') {
+            console.error('❌ Verification failed:', finalPayload)
+            return
+          }
+          console.log('✅ Verification successful')
+          payload = finalPayload as ISuccessResult
+        } catch (verifyError) {
+          console.error('❌ Verification error:', verifyError)
+          return
+        }
+      } else {
+        console.log('🌐 Browser mode detected, skipping verification')
+      }
+
+      console.log('📡 Sending upvote request...')
       const response = await fetch(`/api/news/${newsId}/upvote`, {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          user_id: user.id,
+          user_display_name: user.display_name,
+          payload,
+          action: 'verify',
+        }),
       })
+      
       const data = await response.json()
+      console.log('📡 Upvote response:', { status: response.status, data })
 
       if (response.ok) {
+        console.log('✅ Upvote successful, updating UI...')
         const newUserUpvotes = new Set(userUpvotes)
         if (data.upvoted) {
           newUserUpvotes.add(newsId)
+          console.log('👍 Added upvote for:', newsId)
         } else {
           newUserUpvotes.delete(newsId)
+          console.log('👎 Removed upvote for:', newsId)
         }
         setUserUpvotes(newUserUpvotes)
+        
+        // Refresh the community posts to get updated counts
         if (selectedCommunity) {
+          console.log('🔄 Refreshing community posts...')
           fetchCommunityPosts(selectedCommunity.id)
         }
+      } else {
+        console.error('❌ Upvote failed:', data)
       }
     } catch (error) {
-      console.error("Failed to upvote:", error)
+      console.error("❌ Failed to upvote:", error)
+    }
+  }
+
+  const handleContribute = async (post: Post) => {
+    try {
+      if (!user) {
+        console.error('User not authenticated for contribution')
+        return
+      }
+
+      if (!MiniKit.isInstalled()) {
+        console.log('MiniKit not installed - payment not available')
+        return
+      }
+
+      // Step 1: Initiate payment 
+      const initRes = await fetch('/api/initiate-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to_address: post.author_id, // Using author_id as wallet address for demo
+          author_name: post.author_name || 'Anonymous',
+          post_title: post.title
+        })
+      })
+      
+      if (!initRes.ok) {
+        throw new Error('Failed to initiate payment')
+      }
+      
+      const { id: reference } = await initRes.json()
+
+      // Step 2: Send payment command
+      const payload: PayCommandInput = {
+        reference,
+        to: post.author_id, // Demo: using author_id as wallet address
+        tokens: [
+          {
+            symbol: Tokens.WLD,
+            token_amount: tokenToDecimals(0.1, Tokens.WLD).toString(), // 0.1 WLD minimum
+          },
+          {
+            symbol: Tokens.USDC,
+            token_amount: tokenToDecimals(0.1, Tokens.USDC).toString(), // 0.1 USDC minimum
+          },
+        ],
+        description: `Contribution to "${post.title}" by ${post.author_name || 'Anonymous'}`,
+      }
+
+      const { finalPayload } = await MiniKit.commandsAsync.pay(payload)
+
+      if (finalPayload.status === 'success') {
+        // Step 3: Confirm payment
+        const confirmRes = await fetch('/api/confirm-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ payload: finalPayload }),
+        })
+        
+        const confirmation = await confirmRes.json()
+        if (confirmation.success) {
+          console.log('✅ Payment successful!')
+          // TODO: Update UI to show contribution success
+          // TODO: Refresh posts to show updated contribution stats
+        } else {
+          console.error('❌ Payment verification failed:', confirmation)
+        }
+      } else {
+        console.log('Payment cancelled or failed:', finalPayload)
+      }
+    } catch (error) {
+      console.error("Failed to process contribution:", error)
     }
   }
 
@@ -223,15 +350,6 @@ export function CommunitiesPage({ onCommunitySelect, isVerified = false, onVerif
               </div>
               <span className="text-sm text-foreground">{user.display_name}</span>
             </div>
-            <Button
-              onClick={logout}
-              variant="ghost"
-              size="sm"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <LogOut size={14} className="mr-1" />
-              Logout
-            </Button>
           </div>
         )}
 
@@ -332,6 +450,7 @@ export function CommunitiesPage({ onCommunitySelect, isVerified = false, onVerif
                       variant="ghost"
                       size="sm"
                       className="flex items-center gap-2 flex-1 justify-center h-10"
+                      onClick={() => handleContribute(communityPosts[currentPostIndex])}
                     >
                       <DollarCoinIcon size={18} />
                       <span className="font-medium">Contribute</span>
@@ -360,9 +479,6 @@ export function CommunitiesPage({ onCommunitySelect, isVerified = false, onVerif
           communityId={selectedCommunity.id}
           communityName={selectedCommunity.name}
           onPostCreated={handlePostCreated}
-          isVerified={isVerified}
-          onVerify={onVerify}
-          onResetVerification={onResetVerification}
         />
       </div>
     )
@@ -379,15 +495,6 @@ export function CommunitiesPage({ onCommunitySelect, isVerified = false, onVerif
             </div>
             <span className="text-sm text-foreground">{user.display_name}</span>
           </div>
-          <Button
-            onClick={logout}
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <LogOut size={14} className="mr-1" />
-            Logout
-          </Button>
         </div>
       )}
 

@@ -21,18 +21,17 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <MiniKitProvider>
       <head>
         <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
       </head>
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable} antialiased`}>
-        
-        <AuthProvider>
-          <Suspense fallback={null}>{children}</Suspense>
-        </AuthProvider>
+        <MiniKitProvider>
+          <AuthProvider>
+            <Suspense fallback={null}>{children}</Suspense>
+          </AuthProvider>
+        </MiniKitProvider>
         <Analytics />
       </body>
-      </MiniKitProvider>
     </html>
   )
 }

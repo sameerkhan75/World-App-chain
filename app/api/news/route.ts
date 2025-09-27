@@ -1,5 +1,4 @@
 import { IPFSDataService } from "@/lib/ipfs-service"
-import { AuthService } from "@/lib/auth-service"
 import { type NextRequest, NextResponse } from "next/server"
 
 export async function GET(request: NextRequest) {
@@ -7,24 +6,27 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const communityId = searchParams.get("community_id")
     const authorId = searchParams.get("author_id")
-
-    // Get current user to load their specific data
-    const user = await AuthService.getCurrentUser()
-    const userDisplayName = user?.display_name
+    const userId = searchParams.get("user_id")
+    const userDisplayName = searchParams.get("user_display_name")
 
     console.log('📰 Fetching news for user:', userDisplayName || 'anonymous')
     const news = await IPFSDataService.getNews(
       communityId || undefined,
       authorId || undefined,
-      userDisplayName
+      userDisplayName || undefined
     )
 
-    // Add user upvote status if user is authenticated
-    if (user) {
-      const userUpvotes = await IPFSDataService.getUserUpvotes(user.id, userDisplayName)
-      news.forEach(item => {
-        item.user_upvoted = userUpvotes.includes(item.id)
-      })
+    // Add user upvote status if user info is provided
+    if (userId && userDisplayName) {
+      try {
+        const userUpvotes = await IPFSDataService.getUserUpvotes(userId, userDisplayName)
+        news.forEach(item => {
+          item.user_upvoted = userUpvotes.includes(item.id)
+        })
+      } catch (error) {
+        console.log('Could not get user upvotes:', error)
+        // Continue without upvote status
+      }
     }
 
     return NextResponse.json({ news })
@@ -37,25 +39,24 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     console.log('📝 Starting post creation...')
-    const { title, content, community_id, ipfs_hash } = await request.json()
+    const { title, content, community_id, ipfs_hash, user_id, user_display_name } = await request.json()
     
-    console.log('📝 Request data:', { title, content: content?.substring(0, 50) + '...', community_id, ipfs_hash })
+    console.log('📝 Request data:', { title, content: content?.substring(0, 50) + '...', community_id, ipfs_hash, user_id, user_display_name })
     console.log('📝 Community ID type and value:', { type: typeof community_id, value: community_id, stringified: JSON.stringify(community_id) })
 
     // Validate input
-    if (!title || !content || !community_id) {
-      console.error('❌ Missing required fields:', { title: !!title, content: !!content, community_id: !!community_id })
+    if (!title || !content || !community_id || !user_id || !user_display_name) {
+      console.error('❌ Missing required fields:', { 
+        title: !!title, 
+        content: !!content, 
+        community_id: !!community_id,
+        user_id: !!user_id,
+        user_display_name: !!user_display_name
+      })
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    // Get the current user
-    console.log('👤 Getting current user...')
-    const user = await AuthService.getCurrentUser()
-    if (!user) {
-      console.error('❌ No authenticated user found')
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-    console.log('✅ User authenticated:', user.display_name)
+    console.log('✅ User info provided:', user_display_name)
 
     // Store content on IPFS if not already provided
     let contentHash = ipfs_hash
@@ -76,9 +77,9 @@ export async function POST(request: NextRequest) {
       title,
       content,
       community_id,
-      user.id,
+      user_id,
       contentHash,
-      user.display_name
+      user_display_name
     )
     console.log('✅ News item created successfully:', newsItem.id)
 

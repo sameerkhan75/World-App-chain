@@ -107,7 +107,7 @@ export class IPFSDataService {
       const metadata: any = {
         name: userDisplayName 
           ? `worldfeed-user-${userDisplayName.toLowerCase().trim()}-${Date.now()}`
-          : `worldfeed-data-${Date.now()}`,
+          : `worldfeed-main-${Date.now()}`,
         keyvalues: {
           app: 'worldfeed',
           timestamp
@@ -798,6 +798,25 @@ export class IPFSDataService {
       data.news.push(newsItem)
       console.log('✅ News item added. New count:', data.news.length)
       
+      // Also ensure this news exists in global dataset for cross-user operations (e.g., upvotes)
+      globalData.news = globalData.news || []
+      const alreadyInGlobal = globalData.news.find((n: NewsItem) => n.id === newsItem.id)
+      if (!alreadyInGlobal) {
+        const globalNewsItem: NewsItem = {
+          id: newsItem.id,
+          title: newsItem.title,
+          content: newsItem.content,
+          community_id: newsItem.community_id,
+          author_id: newsItem.author_id,
+          author_name: newsItem.author_name,
+          ipfs_hash: newsItem.ipfs_hash,
+          upvotes: newsItem.upvotes,
+          created_at: newsItem.created_at,
+          updated_at: newsItem.updated_at,
+        }
+        globalData.news.push(globalNewsItem)
+      }
+
       // Update community stats in global data
       console.log('📊 Updating community stats in global data...')
       community.news_count = (community.news_count || 0) + 1
@@ -835,46 +854,91 @@ export class IPFSDataService {
   }
 
   // Upvotes methods
-  static async toggleUpvote(newsId: string, userId: string): Promise<{ upvoted: boolean; upvotes: number }> {
+  static async toggleUpvote(newsId: string, userId: string, userDisplayName?: string): Promise<{ upvoted: boolean; upvotes: number }> {
+    console.log(`🎯 [toggleUpvote] Starting upvote toggle for news: ${newsId}, user: ${userId}, displayName: ${userDisplayName}`)
+    
+    // Work on global data to ensure we can find the news item
     const data = await this.loadAllData()
     data.upvotes = data.upvotes || []
     data.news = data.news || []
 
-    console.log(`🔍 Looking for news item: ${newsId}`)
-    console.log(`📊 Available news items: ${data.news.map((n: NewsItem) => n.id).join(', ')}`)
+    console.log(`🔍 [toggleUpvote] Looking for news item: ${newsId}`)
+    console.log(`📊 [toggleUpvote] Available news items in global: ${data.news.map((n: NewsItem) => n.id).join(', ')}`)
 
     const existingUpvote = data.upvotes.find(
       (upvote: Upvote) => upvote.news_id === newsId && upvote.user_id === userId
     )
+    console.log(`👤 [toggleUpvote] Existing upvote found: ${!!existingUpvote}`)
 
-    const newsItem = data.news.find((item: NewsItem) => item.id === newsId)
+    let newsItem = data.news.find((item: NewsItem) => item.id === newsId)
     if (!newsItem) {
-      console.error(`❌ News item ${newsId} not found in data`)
-      throw new Error('News item not found')
+      console.warn(`⚠️ [toggleUpvote] News not found in global data. Attempting to load from user dataset...`)
+      if (userDisplayName) {
+        const userData = await this.loadAllData(userDisplayName)
+        console.log(`📊 [toggleUpvote] Available news items in user data: ${userData.news?.map((n: NewsItem) => n.id).join(', ') || 'none'}`)
+        const userNewsItem = userData.news?.find((item: NewsItem) => item.id === newsId)
+        if (!userNewsItem) {
+          console.error(`❌ [toggleUpvote] News item ${newsId} not found in any dataset`)
+          throw new Error('News item not found')
+        }
+        // Merge the user news into global for consistency
+        console.log(`🔄 [toggleUpvote] Merging user news item into global data`)
+        data.news.push(userNewsItem)
+        newsItem = userNewsItem
+      } else {
+        console.error(`❌ [toggleUpvote] News item ${newsId} not found and no userDisplayName provided`)
+        throw new Error('News item not found')
+      }
     }
+
+    console.log(`✅ [toggleUpvote] Found news item: "${newsItem.title}" with ${newsItem.upvotes} upvotes`)
 
     // Find the community to update its stats
     const community = data.communities?.find((c: Community) => c.id === newsItem.community_id)
 
     if (existingUpvote) {
+      console.log(`👎 [toggleUpvote] Removing existing upvote`)
       // Remove upvote
       data.upvotes = data.upvotes.filter(
         (upvote: Upvote) => !(upvote.news_id === newsId && upvote.user_id === userId)
       )
       newsItem.upvotes = Math.max(0, newsItem.upvotes - 1)
+      console.log(`📉 [toggleUpvote] Upvotes decreased to: ${newsItem.upvotes}`)
       
       // Update community stats
       if (community) {
         community.total_upvotes = Math.max(0, (community.total_upvotes || 0) - 1)
+        console.log(`📉 [toggleUpvote] Community upvotes decreased to: ${community.total_upvotes}`)
       }
       
       // Update global stats
       data.stats = data.stats || { total_communities: 0, total_news: 0, total_upvotes: 0, total_users: 0 }
       data.stats.total_upvotes = data.upvotes.length
       
+      console.log(`💾 [toggleUpvote] Saving updated data (downvote)...`)
       await this.saveAllData(data)
+      
+      // Also update user data if provided
+      if (userDisplayName) {
+        const userData = await this.loadAllData(userDisplayName)
+        // Update the news item in user data too
+        const userNewsIndex = userData.news?.findIndex((item: NewsItem) => item.id === newsId)
+        if (userNewsIndex !== undefined && userNewsIndex >= 0 && userData.news) {
+          userData.news[userNewsIndex].upvotes = newsItem.upvotes
+        }
+        // Update upvotes in user data
+        userData.upvotes = userData.upvotes || []
+        userData.upvotes = userData.upvotes.filter(
+          (upvote: Upvote) => !(upvote.news_id === newsId && upvote.user_id === userId)
+        )
+        await this.saveAllData(userData, userDisplayName)
+        console.log(`💾 [toggleUpvote] User data also updated (downvote)`)
+      }
+      
+      console.log(`✅ [toggleUpvote] Downvote completed. Result: upvoted=false, upvotes=${newsItem.upvotes}`)
       return { upvoted: false, upvotes: newsItem.upvotes }
     } else {
+      console.log(`👍 [toggleUpvote] Adding new upvote`)
       // Add upvote
       const upvote: Upvote = {
         id: this.generateId(),
@@ -884,17 +948,37 @@ export class IPFSDataService {
       }
       data.upvotes.push(upvote)
       newsItem.upvotes += 1
+      console.log(`📈 [toggleUpvote] Upvotes increased to: ${newsItem.upvotes}`)
       
       // Update community stats
       if (community) {
         community.total_upvotes = (community.total_upvotes || 0) + 1
+        console.log(`📈 [toggleUpvote] Community upvotes increased to: ${community.total_upvotes}`)
       }
       
       // Update global stats
       data.stats = data.stats || { total_communities: 0, total_news: 0, total_upvotes: 0, total_users: 0 }
       data.stats.total_upvotes = data.upvotes.length
       
+      console.log(`💾 [toggleUpvote] Saving updated data (upvote)...`)
       await this.saveAllData(data)
+      
+      // Also update user data if provided
+      if (userDisplayName) {
+        const userData = await this.loadAllData(userDisplayName)
+        // Update the news item in user data too
+        const userNewsIndex = userData.news?.findIndex((item: NewsItem) => item.id === newsId)
+        if (userNewsIndex !== undefined && userNewsIndex >= 0 && userData.news) {
+          userData.news[userNewsIndex].upvotes = newsItem.upvotes
+        }
+        // Add upvote to user data
+        userData.upvotes = userData.upvotes || []
+        userData.upvotes.push(upvote)
+        await this.saveAllData(userData, userDisplayName)
+        console.log(`💾 [toggleUpvote] User data also updated (upvote)`)
+      }
+      
+      console.log(`✅ [toggleUpvote] Upvote completed. Result: upvoted=true, upvotes=${newsItem.upvotes}`)
       return { upvoted: true, upvotes: newsItem.upvotes }
     }
   }

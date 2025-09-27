@@ -6,6 +6,9 @@ export interface User {
   email?: string
   display_name: string
   created_at: string
+  world_id_verified?: boolean
+  world_id_verified_at?: string
+  world_id_nullifier_hash?: string
 }
 
 export class AuthService {
@@ -16,12 +19,14 @@ export class AuthService {
       email: 'demo@example.com',
       display_name: 'Demo User',
       created_at: new Date().toISOString(),
+      world_id_verified: false,
     },
     {
       id: 'demo-user-2', 
       email: 'admin@example.com',
       display_name: 'Admin User',
       created_at: new Date().toISOString(),
+      world_id_verified: false,
     },
   ]
   
@@ -111,7 +116,8 @@ export class AuthService {
     const baseUser = this.DEMO_USERS[0] // Use first demo user as template
     const user = {
       ...baseUser,
-      display_name: displayName || baseUser.display_name
+      display_name: displayName || baseUser.display_name,
+      world_id_verified: false // Start with unverified status
     }
     
     // Store the custom user for later retrieval
@@ -145,6 +151,59 @@ export class AuthService {
       email,
       display_name: displayName,
       created_at: new Date().toISOString(),
+      world_id_verified: false,
+    }
+  }
+
+  // Update user verification status
+  static async updateUserVerification(userId: string, nullifierHash: string): Promise<User | null> {
+    try {
+      // Find user in custom users first
+      const customUser = this.customUsers.get(userId)
+      if (customUser) {
+        customUser.world_id_verified = true
+        customUser.world_id_verified_at = new Date().toISOString()
+        customUser.world_id_nullifier_hash = nullifierHash
+        this.customUsers.set(userId, customUser)
+        console.log(`✅ Updated verification status for custom user: ${customUser.display_name}`)
+        return customUser
+      }
+
+      // Find user in demo users
+      const demoUserIndex = this.DEMO_USERS.findIndex(user => user.id === userId)
+      if (demoUserIndex !== -1) {
+        this.DEMO_USERS[demoUserIndex].world_id_verified = true
+        this.DEMO_USERS[demoUserIndex].world_id_verified_at = new Date().toISOString()
+        this.DEMO_USERS[demoUserIndex].world_id_nullifier_hash = nullifierHash
+        console.log(`✅ Updated verification status for demo user: ${this.DEMO_USERS[demoUserIndex].display_name}`)
+        return this.DEMO_USERS[demoUserIndex]
+      }
+
+      console.error(`❌ User not found for verification update: ${userId}`)
+      return null
+    } catch (error) {
+      console.error('Error updating user verification:', error)
+      return null
+    }
+  }
+
+  // Check if user is verified
+  static async isUserVerified(userId: string): Promise<boolean> {
+    try {
+      const customUser = this.customUsers.get(userId)
+      if (customUser) {
+        return customUser.world_id_verified || false
+      }
+
+      const demoUser = this.DEMO_USERS.find(user => user.id === userId)
+      if (demoUser) {
+        return demoUser.world_id_verified || false
+      }
+
+      return false
+    } catch (error) {
+      console.error('Error checking user verification:', error)
+      return false
     }
   }
 }

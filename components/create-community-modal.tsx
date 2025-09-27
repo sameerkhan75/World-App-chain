@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
+import { useAuth } from "@/components/auth-provider"
 
 interface CreateCommunityModalProps {
   isOpen: boolean
@@ -20,6 +21,7 @@ export function CreateCommunityModal({ isOpen, onClose, onCommunityCreated }: Cr
   const [description, setDescription] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+  const { user } = useAuth()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -33,6 +35,10 @@ export function CreateCommunityModal({ isOpen, onClose, onCommunityCreated }: Cr
     setError("")
 
     try {
+      if (!user) {
+        throw new Error("User not authenticated")
+      }
+      
       const response = await fetch("/api/communities", {
         method: "POST",
         headers: {
@@ -41,6 +47,8 @@ export function CreateCommunityModal({ isOpen, onClose, onCommunityCreated }: Cr
         body: JSON.stringify({
           name: communityName.trim(),
           description: description.trim() || "A new community",
+          user_id: user.id,
+          user_display_name: user.display_name
         }),
       })
 

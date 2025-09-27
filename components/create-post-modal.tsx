@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { X } from "lucide-react"
+import { useAuth } from "@/components/auth-provider"
 
 interface CreatePostModalProps {
   isOpen: boolean
@@ -13,9 +14,6 @@ interface CreatePostModalProps {
   communityId?: string
   communityName?: string
   onPostCreated?: () => void
-  isVerified?: boolean
-  onVerify?: () => Promise<void>
-  onResetVerification?: () => void
 }
 
 export function CreatePostModal({ 
@@ -23,18 +21,16 @@ export function CreatePostModal({
   onClose, 
   communityId, 
   communityName,
-  onPostCreated,
-  isVerified = false,
-  onVerify,
-  onResetVerification
+  onPostCreated
 }: CreatePostModalProps) {
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+  const { user } = useAuth()
 
   // Debug log to see what's being received
-  console.log('CreatePostModal received:', { communityId, communityName, isOpen, isVerified })
+  console.log('CreatePostModal received:', { communityId, communityName, isOpen })
 
   const submitPost = useCallback(async () => {
     console.log('submitPost called with:', { communityId, communityName, title: title.trim(), content: content.trim() })
@@ -43,6 +39,11 @@ export function CreatePostModal({
 
     try {
       console.log('Making API call to /api/news...')
+      
+      if (!user) {
+        throw new Error("User not authenticated")
+      }
+      
       const response = await fetch("/api/news", {
         method: "POST",
         headers: {
@@ -52,6 +53,8 @@ export function CreatePostModal({
           title: title.trim(),
           content: content.trim(),
           community_id: communityId,
+          user_id: user.id,
+          user_display_name: user.display_name
         }),
       })
 
@@ -70,10 +73,6 @@ export function CreatePostModal({
       setContent("")
       setError("")
       
-      // Reset verification state for next post
-      if (onResetVerification) {
-        onResetVerification()
-      }
       
       // Call success callback
       if (onPostCreated) {
@@ -88,7 +87,7 @@ export function CreatePostModal({
     } finally {
       setIsLoading(false)
     }
-  }, [communityId, title, content, onResetVerification, onPostCreated, onClose])
+  }, [communityId, title, content, onPostCreated, onClose])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -103,26 +102,7 @@ export function CreatePostModal({
       return
     }
 
-    // Check verification before posting
-    if (!isVerified && onVerify) {
-      try {
-        console.log('Starting verification process...')
-        setIsLoading(true)
-        await onVerify()
-        console.log('Verification completed, now submitting post...')
-        // After verification succeeds, submit the post
-        await submitPost()
-        return
-      } catch (error) {
-        console.error('Verification failed:', error)
-        setIsLoading(false)
-        setError("Verification failed. Please try again.")
-        return
-      }
-    }
-
-    // If already verified, submit directly
-    console.log('Already verified, submitting post directly...')
+    // Submit the post directly (no verification required)
     await submitPost()
   }
 

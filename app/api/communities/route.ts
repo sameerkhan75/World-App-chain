@@ -1,5 +1,4 @@
 import { IPFSDataService } from "@/lib/ipfs-service"
-import { AuthService } from "@/lib/auth-service"
 import { type NextRequest, NextResponse } from "next/server"
 
 export async function GET() {
@@ -17,16 +16,15 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, description } = await request.json()
+    const { name, description, user_id, user_display_name } = await request.json()
 
-    // Get the current user
-    const user = await AuthService.getCurrentUser()
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // Validate user information is provided
+    if (!user_id || !user_display_name) {
+      return NextResponse.json({ error: "User information required" }, { status: 400 })
     }
 
-    console.log('🏗️ Creating global community for user:', user.display_name)
-    const community = await IPFSDataService.createCommunity(name, description, user.id, user.display_name)
+    console.log('🏗️ Creating global community for user:', user_display_name)
+    const community = await IPFSDataService.createCommunity(name, description, user_id, user_display_name)
     return NextResponse.json({ community })
   } catch (error) {
     console.error('Error creating community:', error)

@@ -1,6 +1,5 @@
 import { IPFSDataService } from "@/lib/ipfs-service"
-import { AuthService } from "@/lib/auth-service"
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 
 // Different demo communities for different users to test isolation
 const getUserDemoCommunities = (userDisplayName: string) => {
@@ -27,31 +26,31 @@ const getUserDemoCommunities = (userDisplayName: string) => {
   }
 }
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
     console.log('🌱 Starting user-specific data seeding...')
     
-    // Get current user for creating communities
-    const user = await AuthService.getCurrentUser()
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized - please log in first" }, { status: 401 })
-    }
+    const { user_id, user_display_name } = await request.json()
+    
+    // Use provided user info or defaults for demo
+    const userId = user_id || 'demo-user'
+    const userDisplayName = user_display_name || 'Demo User'
 
-    console.log('👤 User authenticated:', user.display_name)
+    console.log('👤 Creating communities for user:', userDisplayName)
 
     // Get user-specific demo communities
-    const userCommunities = getUserDemoCommunities(user.display_name)
+    const userCommunities = getUserDemoCommunities(userDisplayName)
     
     // Create each demo community for this specific user
     const createdCommunities = []
     for (const communityData of userCommunities) {
       try {
-        console.log(`🏗️ Creating community for ${user.display_name}: ${communityData.name}`)
+        console.log(`🏗️ Creating community for ${userDisplayName}: ${communityData.name}`)
         const community = await IPFSDataService.createCommunity(
           communityData.name,
           communityData.description,
-          user.id,
-          user.display_name // This ensures user-specific data storage
+          userId,
+          userDisplayName // This ensures user-specific data storage
         )
         createdCommunities.push(community)
         console.log(`✅ Created: ${community.name} (${community.id})`)
@@ -60,11 +59,11 @@ export async function POST() {
       }
     }
 
-    console.log(`✅ Seeding completed for ${user.display_name}`)
+    console.log(`✅ Seeding completed for ${userDisplayName}`)
     
     return NextResponse.json({
-      message: `Demo data seeded successfully for ${user.display_name}`,
-      user: user.display_name,
+      message: `Demo data seeded successfully for ${userDisplayName}`,
+      user: userDisplayName,
       communitiesCreated: createdCommunities.length,
       communities: createdCommunities.map(c => ({ id: c.id, name: c.name }))
     })
@@ -80,6 +79,6 @@ export async function POST() {
 export async function GET() {
   return NextResponse.json({
     message: "POST to this endpoint to seed demo data",
-    note: "You must be logged in to seed data"
+    note: "Include user_id and user_display_name in request body, or defaults will be used"
   })
 }
