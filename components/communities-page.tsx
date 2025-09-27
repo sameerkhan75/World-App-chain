@@ -280,6 +280,17 @@ export function CommunitiesPage({ onCommunitySelect }: CommunitiesPageProps) {
             }`}>
               <div className="p-6 border-2 border-black" style={{ backgroundColor: '#f6efeb' }}>
                 <div className="flex flex-col gap-2">
+                  {/* Author Name */}
+                  <div className="flex items-center gap-2 mb-2">
+                    <User size={14} className="text-black" />
+                    <p className="text-xs text-black" style={{ 
+                      fontFamily: '"Press Start 2P", monospace, "Courier New", Courier',
+                      letterSpacing: '0.05em'
+                    }}>
+                      {communityPosts[currentPostIndex].author_name || 'Anonymous User'}
+                    </p>
+                  </div>
+
                   {/* Post Title Box */}
                   <div className="border-2 border-black p-2" style={{ backgroundColor: 'white' }}>
                     <h3 className="text-sm text-black" style={{ 
