@@ -1,204 +1,291 @@
 "use client"
 
-import type React from "react"
+import React, { useState, useEffect, useRef } from "react"
+import { Plus, Users } from "lucide-react"
 
-import { useState, useRef } from "react"
-import { ChevronLeft, ChevronRight, Clock, Users, ArrowUp, Heart } from "lucide-react"
+// Echo icon component (upvote arrow)
+const EchoIcon = ({ size = 18 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 2L4 10h5v10h6V10h5L12 2z"/>
+  </svg>
+)
+
+// Dollar coin icon component
+const DollarCoinIcon = ({ size = 18 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none"/>
+    <path d="M12 6v12M9.5 9a2.5 2.5 0 0 1 5 0M14.5 15a2.5 2.5 0 0 1-5 0" stroke="currentColor" strokeWidth="2" fill="none"/>
+  </svg>
+)
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { CreatePostModal } from "@/components/create-post-modal"
 
-const demoNewsData = [
-  {
-    id: 1,
-    title: "Ethereum 2.0 Staking Rewards Hit All-Time High",
-    content:
-      "The latest upgrade to Ethereum's proof-of-stake mechanism has resulted in unprecedented staking rewards for validators, with annual yields reaching 8.2%.",
-    community: "DeFi Discussions",
-    timestamp: "2 hours ago",
-    author: "CryptoAnalyst",
-  },
-  {
-    id: 2,
-    title: "New NFT Marketplace Launches with Zero Gas Fees",
-    content:
-      "A revolutionary NFT platform has emerged, offering creators and collectors the ability to mint and trade digital assets without paying any gas fees through Layer 2 scaling.",
-    community: "NFT Creators",
-    timestamp: "4 hours ago",
-    author: "DigitalArtist",
-  },
-  {
-    id: 3,
-    title: "Web3 Gaming Adoption Surges 300% This Quarter",
-    content:
-      "Play-to-earn games and blockchain-based gaming platforms have seen massive growth, with over 2 million new users joining Web3 gaming ecosystems.",
-    community: "Web3 Developers",
-    timestamp: "6 hours ago",
-    author: "GameDev",
-  },
-  {
-    id: 4,
-    title: "Bitcoin Reaches New Technical Milestone",
-    content:
-      "The Bitcoin network has processed its 800 millionth transaction, marking a significant achievement in the cryptocurrency's 15-year history.",
-    community: "Crypto Trading",
-    timestamp: "8 hours ago",
-    author: "BitcoinMaxi",
-  },
-  {
-    id: 5,
-    title: "DAO Treasury Management Best Practices Released",
-    content:
-      "Leading blockchain organizations have published comprehensive guidelines for managing decentralized autonomous organization treasuries effectively.",
-    community: "DAO Governance",
-    timestamp: "12 hours ago",
-    author: "DAOExpert",
-  },
-]
+interface NewsItem {
+  id: string
+  title: string
+  content: string
+  community_id: string
+  author_id: string
+  upvotes: number
+  created_at: string
+  communities?: { name: string }
+  profiles?: { display_name: string }
+  community_name?: string
+  author_name?: string
+}
 
 interface PopularPageProps {
   communityName?: string
+  communityId?: string
 }
 
-export function PopularPage({ communityName }: PopularPageProps) {
+export function PopularPage({ communityName, communityId }: PopularPageProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
-  const [touchStart, setTouchStart] = useState<number | null>(null)
-  const [touchEnd, setTouchEnd] = useState<number | null>(null)
+  const [news, setNews] = useState<NewsItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [isCreatePostOpen, setIsCreatePostOpen] = useState(false)
+  const [userUpvotes, setUserUpvotes] = useState<Set<string>>(new Set())
+  const [isTransitioning, setIsTransitioning] = useState(false)
+  
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const minSwipeDistance = 50
+  useEffect(() => {
+    fetchNews()
+  }, [communityId])
 
-  const onTouchStart = (e: React.TouchEvent) => {
-    setTouchEnd(null)
-    setTouchStart(e.targetTouches[0].clientX)
-  }
+  const fetchNews = async () => {
+    try {
+      let url: string
+      if (communityId) {
+        url = `/api/communities/${communityId}/news`
+      } else {
+        url = "/api/news"
+      }
 
-  const onTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0].clientX)
-  }
-
-  const onTouchEnd = () => {
-    if (!touchStart || !touchEnd) return
-
-    const distance = touchStart - touchEnd
-    const isLeftSwipe = distance > minSwipeDistance
-    const isRightSwipe = distance < -minSwipeDistance
-
-    if (isLeftSwipe && currentIndex < demoNewsData.length - 1) {
-      setCurrentIndex(currentIndex + 1)
+      const response = await fetch(url)
+      const data = await response.json()
+      
+      if (communityId && data.community && data.news) {
+        setNews(data.news)
+      } else if (data.news) {
+        setNews(data.news)
+      }
+      
+      setCurrentIndex(0)
+    } catch (error) {
+      console.error("Failed to fetch news:", error)
+    } finally {
+      setLoading(false)
     }
-    if (isRightSwipe && currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1)
+  }
+
+  const handleUpvote = async (newsId: string) => {
+    try {
+      const response = await fetch(`/api/news/${newsId}/upvote`, {
+        method: "POST",
+      })
+      const data = await response.json()
+
+      if (response.ok) {
+        const newUserUpvotes = new Set(userUpvotes)
+        if (data.upvoted) {
+          newUserUpvotes.add(newsId)
+        } else {
+          newUserUpvotes.delete(newsId)
+        }
+        setUserUpvotes(newUserUpvotes)
+        fetchNews()
+      }
+    } catch (error) {
+      console.error("Failed to upvote:", error)
     }
   }
 
-  const goToPrevious = () => {
-    setCurrentIndex(currentIndex > 0 ? currentIndex - 1 : 0)
+  const nextNews = () => {
+    if (currentIndex < news.length - 1 && !isTransitioning) {
+      setIsTransitioning(true)
+      setTimeout(() => {
+        setCurrentIndex(currentIndex + 1)
+        setIsTransitioning(false)
+      }, 150)
+    }
   }
 
-  const goToNext = () => {
-    setCurrentIndex(currentIndex < demoNewsData.length - 1 ? currentIndex + 1 : demoNewsData.length - 1)
+  const prevNews = () => {
+    if (currentIndex > 0 && !isTransitioning) {
+      setIsTransitioning(true)
+      setTimeout(() => {
+        setCurrentIndex(currentIndex - 1)
+        setIsTransitioning(false)
+      }, 150)
+    }
   }
 
-  const filteredNews = communityName ? demoNewsData.filter((news) => news.community === communityName) : demoNewsData
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartRef.current = {
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY
+    }
+  }
 
-  const currentFilteredNews = filteredNews[currentIndex] || filteredNews[0]
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartRef.current) return
 
-  const pageTitle = communityName || "Popular"
+    const touchEnd = {
+      x: e.changedTouches[0].clientX,
+      y: e.changedTouches[0].clientY
+    }
+
+    const deltaX = touchStartRef.current.x - touchEnd.x
+    const deltaY = Math.abs(touchStartRef.current.y - touchEnd.y)
+
+    // Only trigger swipe if horizontal movement is greater than vertical
+    if (Math.abs(deltaX) > 50 && deltaY < 100) {
+      if (deltaX > 0) {
+        nextNews() // Swipe left -> next
+      } else {
+        prevNews() // Swipe right -> previous
+      }
+    }
+
+    touchStartRef.current = null
+  }
+
+  const handlePostCreated = () => {
+    fetchNews()
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    )
+  }
+
+  if (news.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen px-4">
+        <h1 className="text-2xl font-bold mb-4">{communityName || "Popular"}</h1>
+        <p className="text-muted-foreground mb-4">No news available yet.</p>
+        {communityName && (
+          <Button onClick={() => setIsCreatePostOpen(true)}>
+            <Plus size={16} className="mr-2" />
+            Create Post
+          </Button>
+        )}
+        <CreatePostModal
+          isOpen={isCreatePostOpen}
+          onClose={() => setIsCreatePostOpen(false)}
+          communityId={communityId}
+          communityName={communityName}
+          onPostCreated={handlePostCreated}
+        />
+      </div>
+    )
+  }
+
+  const currentNews = news[currentIndex]
 
   return (
-    <div className="max-w-md mx-auto px-4 pt-4">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-foreground">{pageTitle}</h1>
-        <div className="text-sm text-muted-foreground">
-          {currentIndex + 1} / {filteredNews.length}
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-border/50">
+        <div className="flex items-center justify-between p-4">
+          <h1 className="text-xl font-bold">{communityName || "Popular"}</h1>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted-foreground">
+              {currentIndex + 1} / {news.length}
+            </span>
+            {communityName && (
+              <Button onClick={() => setIsCreatePostOpen(true)} size="sm">
+                <Plus size={16} />
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
-      <div
+      {/* News Card */}
+      <div 
         ref={containerRef}
-        className="mb-4"
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
+        className="p-4"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
       >
-        <Card className="w-full p-6 border border-border bg-card relative overflow-hidden">
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center">
-                <Users size={14} className="text-muted-foreground" />
+        <Card className={`w-full max-w-2xl mx-auto transition-all duration-300 ease-out ${
+          isTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
+        }`}>
+          <div className="p-6">
+            {/* Community Header */}
+            <div className="flex items-center gap-3 mb-4 pb-3 border-b border-border/50">
+              <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center">
+                <Users size={16} className="text-muted-foreground" />
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground">{currentFilteredNews.community}</p>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>{currentFilteredNews.author}</span>
-                  <span>•</span>
-                  <div className="flex items-center gap-1">
-                    <Clock size={12} />
-                    <span>{currentFilteredNews.timestamp}</span>
-                  </div>
-                </div>
+              <div className="flex-1">
+                <p className="font-semibold text-foreground">
+                  {currentNews.communities?.name || currentNews.community_name || "Unknown Community"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  by {currentNews.profiles?.display_name || currentNews.author_name || "Anonymous"}
+                </p>
               </div>
             </div>
-
-            <div className="space-y-4">
-              <h2 className="text-xl font-bold text-foreground text-balance leading-tight">
-                {currentFilteredNews.title}
-              </h2>
-              <p className="text-muted-foreground text-pretty leading-relaxed">{currentFilteredNews.content}</p>
-            </div>
-
-            <div className="flex gap-3 pt-4">
-              <Button variant="outline" size="sm" className="flex items-center gap-2 flex-1 bg-transparent">
-                <ArrowUp size={16} />
-                Upvote
-              </Button>
-              <Button variant="outline" size="sm" className="flex items-center gap-2 flex-1 bg-transparent">
-                <Heart size={16} />
-                Thanks
-              </Button>
-            </div>
-
-            <div className="flex items-center justify-between pt-4">
+            
+            {/* Title */}
+            <h2 className="text-2xl font-bold mb-4 leading-tight">
+              {currentNews.title}
+            </h2>
+            
+            {/* Content */}
+            <p className="text-muted-foreground mb-6 leading-relaxed">
+              {currentNews.content}
+            </p>
+            
+            {/* Actions */}
+            <div className="flex items-center gap-2 pt-3 border-t border-border/50">
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
-                onClick={goToPrevious}
-                disabled={currentIndex === 0}
-                className="flex items-center gap-1 bg-transparent"
+                className={`flex items-center gap-2 flex-1 justify-center h-10 ${
+                  userUpvotes.has(currentNews.id) ? "bg-primary/10 text-primary" : ""
+                }`}
+                onClick={() => handleUpvote(currentNews.id)}
               >
-                <ChevronLeft size={16} />
-                Previous
+                <EchoIcon size={18} />
+                <span className="font-medium">{currentNews.upvotes} Echo</span>
               </Button>
-
-              <div className="flex gap-1">
-                {filteredNews.map((_, index) => (
-                  <div
-                    key={index}
-                    className={`w-2 h-2 rounded-full transition-colors ${
-                      index === currentIndex ? "bg-primary" : "bg-muted"
-                    }`}
-                  />
-                ))}
-              </div>
-
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
-                onClick={goToNext}
-                disabled={currentIndex === filteredNews.length - 1}
-                className="flex items-center gap-1 bg-transparent"
+                className="flex items-center gap-2 flex-1 justify-center h-10"
               >
-                Next
-                <ChevronRight size={16} />
+                <DollarCoinIcon size={18} />
+                <span className="font-medium">Contribute</span>
               </Button>
             </div>
           </div>
         </Card>
       </div>
 
-      <div className="text-center pb-4">
-        <p className="text-xs text-muted-foreground">Swipe left or right to navigate</p>
+      {/* Swipe Indicator */}
+      <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2">
+        <div className="bg-muted/80 backdrop-blur-sm rounded-full px-3 py-1">
+          <p className="text-xs text-muted-foreground">
+            Swipe to navigate
+          </p>
+        </div>
       </div>
+
+      <CreatePostModal
+        isOpen={isCreatePostOpen}
+        onClose={() => setIsCreatePostOpen(false)}
+        communityId={communityId}
+        communityName={communityName}
+        onPostCreated={handlePostCreated}
+      />
     </div>
   )
 }
