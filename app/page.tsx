@@ -6,12 +6,17 @@ import { CommunitiesPage } from "@/components/communities-page"
 import { PopularPage } from "@/components/popular-page"
 import { ProfilePage } from "@/components/profile-page"
 
+interface SelectedCommunity {
+  name: string
+  id: string
+}
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState("communities")
-  const [selectedCommunity, setSelectedCommunity] = useState<string | null>(null)
+  const [selectedCommunity, setSelectedCommunity] = useState<SelectedCommunity | null>(null)
 
-  const handleCommunitySelect = (communityName: string) => {
-    setSelectedCommunity(communityName)
+  const handleCommunitySelect = (communityName: string, communityId: string) => {
+    setSelectedCommunity({ name: communityName, id: communityId })
     setActiveTab("popular")
   }
 
@@ -20,7 +25,10 @@ export default function Home() {
       case "communities":
         return <CommunitiesPage onCommunitySelect={handleCommunitySelect} />
       case "popular":
-        return <PopularPage communityName={selectedCommunity || undefined} />
+        return <PopularPage 
+          communityName={selectedCommunity?.name} 
+          communityId={selectedCommunity?.id} 
+        />
       case "profile":
         return <ProfilePage />
       default:
