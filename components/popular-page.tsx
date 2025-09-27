@@ -5,6 +5,24 @@ import { Plus, Users } from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
 import { MiniKit, VerifyCommandInput, VerificationLevel, ISuccessResult, PayCommandInput, Tokens, tokenToDecimals } from '@worldcoin/minikit-js'
 
+// Utility function to get avatar image path based on community ID hash
+const getCommunityAvatarById = (communityId: string): string => {
+  // Enhanced hash to ensure better distribution and avoid clustering
+  let hash = 0
+  for (let i = 0; i < communityId.length; i++) {
+    const char = communityId.charCodeAt(i)
+    hash = ((hash << 5) - hash) + char
+    hash = hash & hash // Convert to 32-bit integer
+  }
+  
+  // Add some salt based on the community ID's characteristics to improve distribution
+  const salt = communityId.length * 7 + (communityId.charCodeAt(0) || 0) * 13
+  hash = Math.abs(hash + salt)
+  
+  const avatarIndex = (hash % 3) + 1
+  return `/community-avatar-${avatarIndex}.png`
+}
+
 // Echo icon component (upvote arrow)
 const EchoIcon = ({ size = 18 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
@@ -356,8 +374,12 @@ export function PopularPage({ communityName, communityId }: PopularPageProps) {
           <div className="p-6">
             {/* Community Header */}
             <div className="flex items-center gap-3 mb-4 pb-3 border-b border-border/50">
-              <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center">
-                <Users size={16} className="text-muted-foreground" />
+              <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center overflow-hidden">
+                <img 
+                  src={getCommunityAvatarById(currentNews.community_id)} 
+                  alt="Community avatar"
+                  className="w-full h-full object-cover"
+                />
               </div>
               <div className="flex-1">
                 <p className="font-semibold text-foreground">

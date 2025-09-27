@@ -7,6 +7,42 @@ import { Card } from "@/components/ui/card"
 import { CreateCommunityModal } from "@/components/create-community-modal"
 import { CreatePostModal } from "@/components/create-post-modal"
 import { useAuth } from "@/components/auth-provider"
+
+// Utility function to assign avatars ensuring no consecutive duplicates
+const assignCommunityAvatars = (communities: any[]): string[] => {
+  const avatars: string[] = []
+  
+  for (let i = 0; i < communities.length; i++) {
+    const community = communities[i]
+    
+    // Generate initial avatar based on community ID hash
+    let hash = 0
+    for (let j = 0; j < community.id.length; j++) {
+      const char = community.id.charCodeAt(j)
+      hash = ((hash << 5) - hash) + char
+      hash = hash & hash
+    }
+    
+    let avatarIndex = (Math.abs(hash) % 3) + 1
+    
+    // Check if previous community has the same avatar
+    if (i > 0) {
+      const previousAvatar = parseInt(avatars[i - 1].match(/community-avatar-(\d)\.png$/)?.[1] || '1')
+      if (avatarIndex === previousAvatar) {
+        // Cycle to next avatar
+        avatarIndex = (avatarIndex % 3) + 1
+        // If still same (edge case), cycle once more
+        if (avatarIndex === previousAvatar) {
+          avatarIndex = (avatarIndex % 3) + 1
+        }
+      }
+    }
+    
+    avatars.push(`/community-avatar-${avatarIndex}.png`)
+  }
+  
+  return avatars
+}
 import { MiniKit, VerifyCommandInput, VerificationLevel, ISuccessResult, PayCommandInput, Tokens, tokenToDecimals } from '@worldcoin/minikit-js'
 
 // Echo icon component (upvote arrow)
@@ -512,17 +548,25 @@ export function CommunitiesPage({ onCommunitySelect }: CommunitiesPageProps) {
       </div>
 
       <div className="space-y-4">
-        {communities.map((community) => (
-          <div
-            key={community.id}
-            className="hover:opacity-90 transition-opacity cursor-pointer"
-            onClick={() => handleCommunityClick(community)}
-          >
-            <div className="flex gap-4 p-4 border-2 border-black" style={{ backgroundColor: '#f6efeb' }}>
-              {/* Community Profile Picture Box */}
-              <div className="w-32 h-24 border-2 border-black flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'white' }}>
-                <Users size={24} className="text-black" />
-              </div>
+        {(() => {
+          // Pre-assign all avatars to ensure no consecutive duplicates
+          const avatarPaths = assignCommunityAvatars(communities)
+          
+          return communities.map((community, index) => (
+            <div
+              key={community.id}
+              className="hover:opacity-90 transition-opacity cursor-pointer"
+              onClick={() => handleCommunityClick(community)}
+            >
+              <div className="flex gap-4 p-4 border-2 border-black" style={{ backgroundColor: '#f6efeb' }}>
+                {/* Community Profile Picture Box */}
+                <div className="w-32 h-24 border-2 border-black flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ backgroundColor: 'white' }}>
+                  <img 
+                    src={avatarPaths[index]} 
+                    alt={`${community.name} avatar`}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
               
               {/* Community Info - Right Side */}
               <div className="flex-1 flex flex-col gap-2">
@@ -559,7 +603,8 @@ export function CommunitiesPage({ onCommunitySelect }: CommunitiesPageProps) {
               </div>
             </div>
           </div>
-        ))}
+          ))
+        })()}
       </div>
 
       {communities.length === 0 && (
