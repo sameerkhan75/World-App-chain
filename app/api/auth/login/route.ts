@@ -7,7 +7,7 @@ export async function POST(request: NextRequest) {
     const { email, displayName } = await request.json()
 
     // For demo purposes, create a session with demo user
-    const { user, sessionToken } = await AuthService.createDemoSession()
+    const { user, sessionToken } = await AuthService.createDemoSession(displayName)
 
     // Ensure profile exists in IPFS
     await IPFSDataService.createProfile(user.id, displayName || user.display_name)

@@ -8,7 +8,7 @@ export async function GET() {
       return NextResponse.json({ 
         error: "No PINATA_JWT found in environment variables",
         hasJWT: false 
-      })
+      },{ status: 500 })    // added status
     }
 
     // Get list of pinned files
@@ -23,7 +23,7 @@ export async function GET() {
       return NextResponse.json({ 
         error: `Pinata API error: ${response.status} ${errorText}`,
         hasJWT: true 
-      })
+      },{ status: response.status })   // added status
     }
 
     const data = await response.json()
@@ -51,7 +51,7 @@ export async function GET() {
         keyvalues: file.metadata?.keyvalues
       })),
       mainDataHash: process.env.MAIN_DATA_HASH || null
-    })
+    },{status:200}) // added status
   } catch (error) {
     console.error('Debug API error:', error)
     return NextResponse.json({ 

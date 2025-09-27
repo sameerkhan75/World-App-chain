@@ -24,6 +24,9 @@ export class AuthService {
       created_at: new Date().toISOString(),
     },
   ]
+  
+  // Store custom user sessions
+  private static customUsers = new Map<string, User>()
 
   // Generate a simple session token
   private static generateSessionToken(userId: string): string {
@@ -64,7 +67,7 @@ export class AuthService {
         return null
       }
 
-      return this.DEMO_USERS.find(user => user.id === session.userId) || null
+      return this.customUsers.get(session.userId) || this.DEMO_USERS.find(user => user.id === session.userId) || null
     } catch (error) {
       console.error('Error getting current user:', error)
       return null
@@ -85,7 +88,7 @@ export class AuthService {
         return null
       }
 
-      return this.DEMO_USERS.find(user => user.id === session.userId) || null
+      return this.customUsers.get(session.userId) || this.DEMO_USERS.find(user => user.id === session.userId) || null
     } catch (error) {
       console.error('Error getting current user from request:', error)
       return null
@@ -104,8 +107,16 @@ export class AuthService {
   }
 
   // Create a demo session for development
-  static async createDemoSession(): Promise<{ user: User; sessionToken: string }> {
-    const user = this.DEMO_USERS[0] // Use first demo user
+  static async createDemoSession(displayName?: string): Promise<{ user: User; sessionToken: string }> {
+    const baseUser = this.DEMO_USERS[0] // Use first demo user as template
+    const user = {
+      ...baseUser,
+      display_name: displayName || baseUser.display_name
+    }
+    
+    // Store the custom user for later retrieval
+    this.customUsers.set(user.id, user)
+    
     const sessionToken = this.generateSessionToken(user.id)
     return { user, sessionToken }
   }

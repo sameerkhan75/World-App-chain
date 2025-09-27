@@ -16,6 +16,8 @@ export function LoginModal({ isOpen, onClose, onLogin }: LoginModalProps) {
   const [displayName, setDisplayName] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+  
+  console.log("LoginModal render:", { isOpen })
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -62,10 +64,14 @@ export function LoginModal({ isOpen, onClose, onLogin }: LoginModalProps) {
     }
   }
 
-  if (!isOpen) return null
+  if (!isOpen) {
+    console.log("LoginModal: Not showing because isOpen is false")
+    return null
+  }
 
+  console.log("LoginModal: Rendering modal")
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4" style={{ zIndex: 9999 }}>
       <Card className="w-full max-w-sm bg-background border border-border">
         <div className="p-6">
           <div className="flex flex-col items-center mb-6">

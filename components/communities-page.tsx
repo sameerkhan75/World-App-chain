@@ -28,6 +28,7 @@ interface Community {
   name: string
   description: string
   created_at: string
+  creator_name?: string
   news_count: number
   total_upvotes: number
 }
@@ -48,9 +49,12 @@ interface Post {
 
 interface CommunitiesPageProps {
   onCommunitySelect?: (communityName: string, communityId: string) => void
+  isVerified?: boolean
+  onVerify?: () => Promise<void>
+  onResetVerification?: () => void
 }
 
-export function CommunitiesPage({ onCommunitySelect }: CommunitiesPageProps) {
+export function CommunitiesPage({ onCommunitySelect, isVerified = false, onVerify, onResetVerification }: CommunitiesPageProps) {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false)
   const [communities, setCommunities] = useState<Community[]>([])
@@ -101,6 +105,7 @@ export function CommunitiesPage({ onCommunitySelect }: CommunitiesPageProps) {
   }
 
   const handleCommunityClick = (community: Community) => {
+    console.log('🏠 Community selected:', { id: community.id, name: community.name })
     setSelectedCommunity(community)
     fetchCommunityPosts(community.id)
   }
@@ -355,6 +360,9 @@ export function CommunitiesPage({ onCommunitySelect }: CommunitiesPageProps) {
           communityId={selectedCommunity.id}
           communityName={selectedCommunity.name}
           onPostCreated={handlePostCreated}
+          isVerified={isVerified}
+          onVerify={onVerify}
+          onResetVerification={onResetVerification}
         />
       </div>
     )
@@ -428,6 +436,18 @@ export function CommunitiesPage({ onCommunitySelect }: CommunitiesPageProps) {
                     letterSpacing: '0.01em',
                     lineHeight: '1.5'
                   }}>{community.description}</p>
+                </div>
+
+                {/* Creator Name - moved below description and made smaller */}
+                <div className="flex items-center gap-1 mt-1">
+                  <User size={8} className="text-black opacity-70" />
+                  <p className="text-xs text-black opacity-70" style={{ 
+                    fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                    fontSize: '10px',
+                    fontWeight: '400'
+                  }}>
+                    Created by {community.creator_name || 'Anonymous User'}
+                  </p>
                 </div>
               </div>
             </div>

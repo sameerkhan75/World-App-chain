@@ -4,7 +4,10 @@ import { type NextRequest, NextResponse } from "next/server"
 
 export async function GET() {
   try {
+    // Communities are global, not user-specific
+    console.log('📋 Fetching global communities')
     const communities = await IPFSDataService.getCommunities()
+    console.log('📋 Retrieved communities:', communities.map(c => ({ id: c.id, name: c.name })))
     return NextResponse.json({ communities })
   } catch (error) {
     console.error('Error fetching communities:', error)
@@ -22,7 +25,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const community = await IPFSDataService.createCommunity(name, description, user.id)
+    console.log('🏗️ Creating global community for user:', user.display_name)
+    const community = await IPFSDataService.createCommunity(name, description, user.id, user.display_name)
     return NextResponse.json({ community })
   } catch (error) {
     console.error('Error creating community:', error)

@@ -9,12 +9,16 @@ export async function GET(
   try {
     const { id: communityId } = await params
     
-    // Get current user for upvote status
+    // Get current user for upvote status and user-specific data
     const user = await AuthService.getCurrentUser()
+    const userDisplayName = user?.display_name
+    
+    console.log('📋 Fetching community news for user:', userDisplayName || 'anonymous', 'community:', communityId)
     
     const result = await IPFSDataService.getCommunityNews(
       communityId, 
-      user?.id
+      user?.id,
+      userDisplayName
     )
 
     if (!result.community) {

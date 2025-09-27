@@ -6,6 +6,7 @@ import { Analytics } from "@vercel/analytics/next"
 import { Suspense } from "react"
 import { AuthProvider } from "@/components/auth-provider"
 import "./globals.css"
+import { MiniKitProvider } from "@worldcoin/minikit-js/minikit-provider"
 
 export const metadata: Metadata = {
   title: "WorldFeed - IPFS Social",
@@ -20,15 +21,18 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <MiniKitProvider>
       <head>
         <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
       </head>
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable} antialiased`}>
+        
         <AuthProvider>
           <Suspense fallback={null}>{children}</Suspense>
         </AuthProvider>
         <Analytics />
       </body>
+      </MiniKitProvider>
     </html>
   )
 }

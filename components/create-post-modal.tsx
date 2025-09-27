@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -13,6 +13,9 @@ interface CreatePostModalProps {
   communityId?: string
   communityName?: string
   onPostCreated?: () => void
+  isVerified?: boolean
+  onVerify?: () => Promise<void>
+  onResetVerification?: () => void
 }
 
 export function CreatePostModal({ 
@@ -20,7 +23,10 @@ export function CreatePostModal({
   onClose, 
   communityId, 
   communityName,
-  onPostCreated 
+  onPostCreated,
+  isVerified = false,
+  onVerify,
+  onResetVerification
 }: CreatePostModalProps) {
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
@@ -28,25 +34,15 @@ export function CreatePostModal({
   const [error, setError] = useState("")
 
   // Debug log to see what's being received
-  console.log('CreatePostModal received:', { communityId, communityName, isOpen })
+  console.log('CreatePostModal received:', { communityId, communityName, isOpen, isVerified })
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    if (!title.trim() || !content.trim()) {
-      setError("Please fill in all fields")
-      return
-    }
-
-    if (!communityId) {
-      setError("No community selected")
-      return
-    }
-
+  const submitPost = useCallback(async () => {
+    console.log('submitPost called with:', { communityId, communityName, title: title.trim(), content: content.trim() })
     setIsLoading(true)
     setError("")
 
     try {
+      console.log('Making API call to /api/news...')
       const response = await fetch("/api/news", {
         method: "POST",
         headers: {
@@ -62,6 +58,10 @@ export function CreatePostModal({
       const data = await response.json()
 
       if (!response.ok) {
+        // Handle specific error cases
+        if (data.error && data.error.includes("Community not found")) {
+          throw new Error("This community no longer exists. Please refresh the page and try again.")
+        }
         throw new Error(data.error || "Failed to create post")
       }
 
@@ -69,6 +69,11 @@ export function CreatePostModal({
       setTitle("")
       setContent("")
       setError("")
+      
+      // Reset verification state for next post
+      if (onResetVerification) {
+        onResetVerification()
+      }
       
       // Call success callback
       if (onPostCreated) {
@@ -83,6 +88,42 @@ export function CreatePostModal({
     } finally {
       setIsLoading(false)
     }
+  }, [communityId, title, content, onResetVerification, onPostCreated, onClose])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!title.trim() || !content.trim()) {
+      setError("Please fill in all fields")
+      return
+    }
+
+    if (!communityId) {
+      setError("No community selected")
+      return
+    }
+
+    // Check verification before posting
+    if (!isVerified && onVerify) {
+      try {
+        console.log('Starting verification process...')
+        setIsLoading(true)
+        await onVerify()
+        console.log('Verification completed, now submitting post...')
+        // After verification succeeds, submit the post
+        await submitPost()
+        return
+      } catch (error) {
+        console.error('Verification failed:', error)
+        setIsLoading(false)
+        setError("Verification failed. Please try again.")
+        return
+      }
+    }
+
+    // If already verified, submit directly
+    console.log('Already verified, submitting post directly...')
+    await submitPost()
   }
 
   const handleClose = () => {

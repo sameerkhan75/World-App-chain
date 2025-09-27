@@ -3,39 +3,46 @@ import { NextResponse } from "next/server"
 
 export async function GET() {
   try {
-    // Get all data to see current state
+    const validation = await IPFSDataService.validateData()
+    const currentHash = IPFSDataService.getCurrentHash()
+    
+    // Get recent activity
     const communities = await IPFSDataService.getCommunities()
-    const news = await IPFSDataService.getNews()
-
-    // Calculate stats
-    const totalUpvotes = news.reduce((sum, n) => sum + (n.upvotes || 0), 0)
-    const communitiesWithStats = communities.map(community => {
-      const communityNews = news.filter(n => n.community_id === community.id)
-      const communityUpvotes = communityNews.reduce((sum, n) => sum + (n.upvotes || 0), 0)
-      
-      return {
-        ...community,
-        actual_news_count: communityNews.length,
-        actual_total_upvotes: communityUpvotes
-      }
-    })
-
+    const allNews = await IPFSDataService.getNews()
+    
     return NextResponse.json({
-      communities: communitiesWithStats,
-      news: news,
+      validation,
+      currentHash,
       stats: {
-        totalCommunities: communities.length,
-        totalNews: news.length,
-        totalUpvotes: totalUpvotes,
-        averageNewsPerCommunity: communities.length > 0 ? (news.length / communities.length).toFixed(1) : 0
+        communities: communities.length,
+        news: allNews.length,
+        totalDataSize: validation.dataSize
       },
-      mainDataHash: process.env.MAIN_DATA_HASH || null,
-      dataStructureVersion: '1.0'
+      recentActivity: {
+        latestCommunity: communities[communities.length - 1],
+        latestNews: allNews[0], // Already sorted by upvotes/date
+        totalUpvotes: allNews.reduce((sum, news) => sum + news.upvotes, 0)
+      },
+      timestamp: new Date().toISOString()
     })
   } catch (error) {
     console.error('Debug data API error:', error)
     return NextResponse.json({ 
       error: "Internal server error",
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 })
+  }
+}
+
+// Force cache clear for debugging
+export async function DELETE() {
+  try {
+    IPFSDataService.clearCache()
+    return NextResponse.json({ message: "Cache cleared successfully" })
+  } catch (error) {
+    console.error('Error clearing cache:', error)
+    return NextResponse.json({ 
+      error: "Failed to clear cache",
       details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 })
   }
