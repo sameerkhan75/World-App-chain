@@ -4,10 +4,10 @@ import { User, Calendar, MessageSquare } from "lucide-react"
 import { Card } from "@/components/ui/card"
 
 const userProfile = {
-  name: "Alex Chen",
+  name: "sam",
   bio: "Web3 enthusiast and blockchain developer. Building the future of decentralized applications.",
   joinedDate: "January 2023",
-  postsCount: 24,
+  postsCount: 2,
 }
 
 const userPosts = [
@@ -15,10 +15,10 @@ const userPosts = [
     id: 1,
     title: "Understanding Smart Contract Security",
     content:
-      "Security should be the top priority when developing smart contracts. Here are the key principles every developer should follow...",
+      "Security should be the top priority when developing smart contracts.",
     community: "Web3 Developers",
     timestamp: "3 days ago",
-    likes: 45,
+    author_name: "sam",
   },
   {
     id: 2,
@@ -27,25 +27,7 @@ const userPosts = [
       "Decentralized finance is evolving rapidly. New protocols are emerging that solve liquidity and scalability challenges...",
     community: "DeFi Discussions",
     timestamp: "1 week ago",
-    likes: 32,
-  },
-  {
-    id: 3,
-    title: "NFT Utility Beyond Art",
-    content:
-      "Non-fungible tokens have applications far beyond digital art. From gaming to identity verification, the possibilities are endless...",
-    community: "NFT Creators",
-    timestamp: "2 weeks ago",
-    likes: 28,
-  },
-  {
-    id: 4,
-    title: "Layer 2 Scaling Solutions Comparison",
-    content:
-      "A comprehensive analysis of different Layer 2 solutions and their trade-offs in terms of security, speed, and cost...",
-    community: "Blockchain News",
-    timestamp: "3 weeks ago",
-    likes: 67,
+    author_name: "sam",
   },
 ]
 
@@ -81,20 +63,47 @@ export function ProfilePage() {
       <div className="space-y-4">
         <h3 className="text-lg font-semibold text-foreground">Your Posts</h3>
         {userPosts.map((post) => (
-          <Card key={post.id} className="p-4 border border-border">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-primary bg-accent px-2 py-1 rounded">{post.community}</span>
-                <span className="text-xs text-muted-foreground">{post.timestamp}</span>
-              </div>
+          <Card key={post.id} className="w-full max-w-2xl mx-auto">
+            <div className="p-6 border-2 border-black" style={{ backgroundColor: '#f6efeb' }}>
+              <div className="flex flex-col gap-2">
+                {/* Author Name */}
+                <div className="flex items-center gap-2 mb-2">
+                  <User size={14} className="text-black" />
+                  <p className="text-xs text-black" style={{ 
+                    fontFamily: '"Press Start 2P", monospace, "Courier New", Courier',
+                    letterSpacing: '0.05em'
+                  }}>
+                    {post.author_name || 'Anonymous User'}
+                  </p>
+                </div>
 
-              <div>
-                <h4 className="font-semibold text-foreground text-balance mb-2">{post.title}</h4>
-                <p className="text-sm text-muted-foreground text-pretty">{post.content}</p>
-              </div>
+                {/* Community and Timestamp */}
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-black bg-white px-2 py-1 border border-black" style={{
+                    fontFamily: '"Press Start 2P", monospace, "Courier New", Courier',
+                    fontSize: '10px'
+                  }}>{post.community}</span>
+                  <span className="text-xs text-black opacity-70">{post.timestamp}</span>
+                </div>
 
-              <div className="flex items-center justify-between pt-2">
-                <div className="text-xs text-muted-foreground">{post.likes} likes</div>
+                {/* Post Title Box */}
+                <div className="border-2 border-black p-2" style={{ backgroundColor: 'white' }}>
+                  <h3 className="text-sm text-black" style={{ 
+                    fontFamily: '"Press Start 2P", monospace, "Courier New", Courier',
+                    letterSpacing: '0.05em',
+                    textShadow: '1px 1px 0px rgba(0,0,0,0.3)'
+                  }}>{post.title}</h3>
+                </div>
+                
+                {/* Post Content Box */}
+                <div className="border-2 border-black p-2" style={{ backgroundColor: 'white' }}>
+                  <p className="text-sm text-black leading-relaxed italic" style={{ 
+                    fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                    fontWeight: '300',
+                    letterSpacing: '0.01em',
+                    lineHeight: '1.5'
+                  }}>{post.content}</p>
+                </div>
               </div>
             </div>
           </Card>

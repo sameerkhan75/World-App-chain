@@ -412,7 +412,7 @@ export function PopularPage({ communityName, communityId }: PopularPageProps) {
                 onClick={() => handleUpvote(currentNews.id)}
               >
                 <EchoIcon size={18} />
-                <span className="font-medium">{currentNews.upvotes} Echo</span>
+                <span className="font-medium">Echo</span>
               </Button>
               <Button
                 variant="ghost"

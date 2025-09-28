@@ -480,7 +480,7 @@ export function CommunitiesPage({ onCommunitySelect }: CommunitiesPageProps) {
                       onClick={() => handleUpvote(communityPosts[currentPostIndex].id)}
                     >
                       <EchoIcon size={18} />
-                      <span className="font-medium">{communityPosts[currentPostIndex].upvotes} Echo</span>
+                      <span className="font-medium">Echo</span>
                     </Button>
                     <Button
                       variant="ghost"
